@@ -78,9 +78,10 @@ lipo -create "$WORK/install-macos-arm64/lib/libtdjson.dylib" "$WORK/install-maco
 cp "$WORK/install-ios-arm64/lib/libtdjson.dylib" "$OUTPUT/ios/lib/"
 lipo -create "$WORK/install-simulator-arm64/lib/libtdjson.dylib" "$WORK/install-simulator-x86_64/lib/libtdjson.dylib" \
   -output "$OUTPUT/ios-simulator/lib/libtdjson.dylib"
-lipo -verify_arch arm64 x86_64 "$OUTPUT/macos/lib/libtdjson.dylib"
-lipo -verify_arch arm64 "$OUTPUT/ios/lib/libtdjson.dylib"
-lipo -verify_arch arm64 x86_64 "$OUTPUT/ios-simulator/lib/libtdjson.dylib"
+# Apple lipo treats every argument after -verify_arch as an architecture.
+lipo "$OUTPUT/macos/lib/libtdjson.dylib" -verify_arch arm64 x86_64
+lipo "$OUTPUT/ios/lib/libtdjson.dylib" -verify_arch arm64
+lipo "$OUTPUT/ios-simulator/lib/libtdjson.dylib" -verify_arch arm64 x86_64
 rm -rf "$OUTPUT/TDLib.xcframework"
 xcodebuild -create-xcframework \
   -library "$OUTPUT/macos/lib/libtdjson.dylib" -headers "$OUTPUT/include" \
