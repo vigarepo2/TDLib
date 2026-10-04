@@ -44,7 +44,7 @@ The workflow selects an exact commit from official TDLib, builds the target pack
 
 A first engine build can take a long time. Linux, Android, Windows, Apple, and browser targets each have native toolchains. A new upstream engine update also needs a new compilation. The time saving happens when your applications reuse the resulting libraries.
 
-Until that run succeeds, the public images and release may not exist. A green **Validate** run alone does not mean images were published.
+The `android` image becomes available when **Package Android SDK** finishes successfully, so TelePlay does not need to wait for Windows, Apple, browser, or Linux builds. The complete image set and GitHub release require the later publishing job to succeed. A green **Validate** run alone does not mean images were published.
 
 ## Which workflow does what?
 
@@ -74,9 +74,9 @@ The output includes the version and a text-processing result. It then exits norm
 
 ## 6. Build TelePlay
 
-Once a compatible Android package has been published, run your usual signed or unsigned build in the **TelePlay** repository. TDLib publication does not itself produce a TelePlay APK.
+Once **Package Android SDK** publishes a compatible `vs69/tdlib:android` image, run your usual signed or unsigned build in the **TelePlay** repository. You can do this even while unrelated platform builds are running or need repair. TDLib publication does not itself produce a TelePlay APK.
 
-TelePlay checks the public Android package against the engine it expects. A match lets it reuse those libraries. A different upstream version or binding is not silently substituted: the app uses its existing verified package or source-build path instead.
+TelePlay checks the public Android package against the engine it expects. A match lets it reuse those libraries. A different upstream version or binding is not silently substituted: the APK workflow stops early and points to this repository's build-and-publish workflow. TelePlay's APK workflows do not compile TDLib or use an old native release.
 
 If you change only TelePlay screens or app logic, the native engine can normally be reused. If you deliberately update TelePlay's engine or native toolchain, both projects must agree on those inputs before this fast path applies.
 
@@ -85,15 +85,15 @@ If you change only TelePlay screens or app logic, the native engine can normally
 | What you see | What to check |
 | --- | --- |
 | `DOCKER_PASSWORD` is missing | Add a repository **secret** with exactly that name in the TDLib repository |
-| Docker push is denied | The token belongs to `vs69`, has the required permissions, is unexpired, and the public `tdlib` repository exists |
-| Images uploaded, but the overview update failed | Check the token's repository-description permissions and the publishing log; enable the documented metadata permissions or paste the README into Docker Hub manually. Already-published images remain available |
+| Docker push is denied | Check that `DOCKER_USER` is `vs69`, `DOCKER_PASSWORD` permits Docker login, and the public `tdlib` repository exists under that account |
+| Images uploaded, but the overview update failed | Check the Docker Hub login, repository ownership and publishing log, or paste the README into Docker Hub manually. Already-published images remain available |
 | `manifest unknown` or image not found | The first publishing run may not have completed, or you may have used the wrong tag |
-| TelePlay still compiles native code | Its pinned engine differs from the published image, the image cannot be pulled, or no compatible saved package exists; read the compatibility result in that run |
+| TelePlay reports an unavailable or incompatible engine | Publish `vs69/tdlib:android` and ensure its source and toolchain match TelePlay's pins. Updated APK workflows stop early instead of compiling native code |
 | A scheduled run disappeared | It finished successfully and found no changes; the cleanup workflow removed only that eligible check |
 | A build failed after an upstream update | Keep the failed run for diagnosis; update the affected build recipe and rerun the workflow after fixing it |
 | Docker Hub reports a pull limit | Wait for the limit window or configure authenticated pulls where needed; public access is still subject to Docker Hub limits |
 
-If only Docker Hub documentation failed, fix the token permission if needed and rerun the failed job, or run **Validate** on `main`. That retries the overview update without rebuilding the engine.
+If only Docker Hub documentation failed, correct the account login or repository ownership and rerun the failed job, or run **Validate** on `main`. That retries the overview update without rebuilding the engine.
 
 To rebuild with unchanged inputs, run **Build and publish TDLib** with **Force rebuild** selected. Do not use that option for every app update; its purpose is to rebuild the engine when needed, such as after a packaging fix or a dependency refresh.
 

@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 ABIS = ("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
 FORMAT = "org.vigarepo2.tdlib.android.v1"
 LIBRARIES = ("libtdjson.so", "libtdjsonjava.so")
+NATIVE_CONTRACT = {"interfaces": ["json", "json-java"], "cxx_runtime": "c++_static",
+                   "openssl_linkage": "static", "optimization": "O2", "ndebug": True,
+                   "lto": False, "page_size": 16384}
 SOURCE_FILES = {
     "sources/JsonClient.java": "example/java/org/drinkless/tdlib/JsonClient.java",
     "sources/td_api.tl": "td/generate/scheme/td_api.tl",
@@ -170,7 +173,7 @@ def create(source, libraries, output, config, build_fingerprint):
                     "openssl": settings["openssl"], "ndk_version": settings["ndk_version"],
                     "android_api": settings["api"], "abis": list(ABIS),
                     "jni_binding_sha256": binding_hash(stage / "sources/JsonClient.java"),
-                    "build_fingerprint": build_fingerprint, "files": records}
+                    "build_fingerprint": build_fingerprint, "native_contract": json.loads(canonical(NATIVE_CONTRACT)), "files": records}
         (stage / "manifest.json").write_bytes(canonical(manifest) + b"\n")
         names = ("manifest.json",) + FILES
         (stage / "checksums.sha256").write_text("".join(f"{sha256(stage / name)}  {name}\n" for name in names))
@@ -184,6 +187,8 @@ def verify(directory):
     if (manifest.get("format") != FORMAT or manifest.get("schema") != 1
             or manifest.get("platform") != "android" or manifest.get("abis") != list(ABIS)):
         raise ValueError("Unsupported Android manifest")
+    if canonical(manifest.get("native_contract")) != canonical(NATIVE_CONTRACT):
+        raise ValueError("Unsupported Android native build contract")
     records = manifest.get("files")
     if not isinstance(records, list) or [r.get("path") for r in records] != list(FILES):
         raise ValueError("Manifest must describe complete exact Android payload")

@@ -63,6 +63,8 @@ def main():
     parser.add_argument("--output", default="check-result.json")
     args = parser.parse_args()
     config = json.loads((ROOT / "config/build.json").read_text())
+    if os.environ.get("DOCKER_IMAGE", config["docker"]["image"]) != config["docker"]["image"]:
+        raise ValueError("Workflow DOCKER_IMAGE and config/build.json must name the same repository")
     api = GitHub()
     upstream = config["upstream"]["repository"]
     ref = config["upstream"]["ref"]
@@ -96,7 +98,7 @@ def main():
     pathlib.Path(args.output).write_text(json.dumps(result, indent=2) + "\n")
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-            for name, value in {"changed": str(changed).lower(), "commit": commit, "version": version, "fingerprint": recipe, "image": config["docker"]["image"], "ndk": config["android"]["ndk_version"]}.items():
+            for name, value in {"changed": str(changed).lower(), "commit": commit, "version": version, "fingerprint": recipe, "ndk": config["android"]["ndk_version"]}.items():
                 print(f"{name}={value}", file=output)
     print(f"Official TDLib {version} at {commit}; {'build required' if changed else 'already published, no build needed'}")
 

@@ -8,6 +8,8 @@ arm64-v8a    armeabi-v7a    x86    x86_64
 
 The native libraries are checked for 16 KB ELF alignment. Your app's Android Gradle Plugin and APK packaging must also handle 16 KB pages correctly; verify the finished APK on the Android versions and devices you support.
 
+The `android` Docker tag is published as soon as the Android packaging job passes, independently of other platforms. TelePlay can use that image immediately. AAR and archive downloads in the rolling GitHub release are replaced after the complete all-platform publication succeeds; they can briefly contain an older engine while other targets are still building. Check the package manifest when choosing an input.
+
 ## Option A: use the AAR in Java or Kotlin
 
 After a successful publication, download `tdlib-android.aar` from the [latest release](https://github.com/vigarepo2/TDLib/releases/tag/latest) and place it at `app/libs/tdlib-android.aar`.
@@ -97,6 +99,6 @@ Use the `td_api.tl` shipped with your exact package as the API reference. Update
 
 ## TelePlay's compatibility checks
 
-TelePlay's build verifies the candidate package against its expected native engine and binding. A matching public package avoids a new TDLib compilation. If the image is unavailable or has moved to a different engine, TelePlay uses its existing verified package or pinned source build. If a package claims to match but its files fail validation, the build fails instead of accepting the damaged files.
+TelePlay's build verifies the candidate package against its expected native engine and binding. Its APK workflows require the matching public image and never compile TDLib. If the image is unavailable or has moved to a different engine, TelePlay stops early and links to this repository's producer workflow. If a package claims to match but its files fail validation, the build fails instead of accepting the damaged files.
 
 Updating `vs69/tdlib:android` therefore does not silently upgrade TelePlay. To adopt a new engine, update TelePlay's expected inputs and bindings together, then run its application checks. Once that combination is compatible, future application builds can reuse it.

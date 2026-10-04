@@ -14,6 +14,7 @@ concurrency:
   group: tdlib-publish
   cancel-in-progress: false
 env:
+  DOCKER_IMAGE: vs69/tdlib
   DOCKER_USER: ${{ secrets.DOCKER_USER || 'vs69' }}
 jobs:
   check:
@@ -25,7 +26,6 @@ jobs:
       commit: ${{ steps.upstream.outputs.commit }}
       version: ${{ steps.upstream.outputs.version }}
       fingerprint: ${{ steps.upstream.outputs.fingerprint }}
-      image: ${{ steps.upstream.outputs.image }}
       ndk: ${{ steps.upstream.outputs.ndk }}
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +106,7 @@ jobs:
           pull: true
           no-cache: ${{ inputs.force || false }}
           platforms: linux/${{ matrix.arch }}
-          outputs: type=image,name=${{ needs.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             TDLIB_COMMIT=${{ needs.check.outputs.commit }}
             TDLIB_VERSION=${{ needs.check.outputs.version }}
@@ -117,7 +117,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=linux-${{ matrix.variant }}-${{ matrix.arch }}
       - name: Test final runtime image
         env:
-          IMAGE: ${{ needs.check.outputs.image }}
+          IMAGE: ${{ env.DOCKER_IMAGE }}
           DIGEST: ${{ steps.runtime.outputs.digest }}
         run: docker run --rm "$IMAGE@$DIGEST" tdlib-info
       - name: Build development image into an untagged digest
@@ -128,9 +128,8 @@ jobs:
           file: ${{ matrix.file }}
           target: devel
           pull: true
-          no-cache: ${{ inputs.force || false }}
           platforms: linux/${{ matrix.arch }}
-          outputs: type=image,name=${{ needs.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             TDLIB_COMMIT=${{ needs.check.outputs.commit }}
             TDLIB_VERSION=${{ needs.check.outputs.version }}
@@ -141,7 +140,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=linux-${{ matrix.variant }}-${{ matrix.arch }}
       - name: Test development image and record both digests
         env:
-          IMAGE: ${{ needs.check.outputs.image }}
+          IMAGE: ${{ env.DOCKER_IMAGE }}
           RUNTIME_DIGEST: ${{ steps.runtime.outputs.digest }}
           DEVEL_DIGEST: ${{ steps.devel.outputs.digest }}
         run: |
@@ -187,13 +186,11 @@ jobs:
       - name: Install native build tools
         if: steps.native-cache.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build gperf perl build-essential curl python3 git binutils
-      - uses: android-actions/setup-android@v3
-        if: steps.native-cache.outputs.cache-hit != 'true'
       - name: Install pinned Android NDK
         if: steps.native-cache.outputs.cache-hit != 'true'
         env:
           NDK_VERSION: ${{ needs.check.outputs.ndk }}
-        run: sdkmanager "ndk;$NDK_VERSION"
+        run: bash scripts/install-android-sdk.sh --sdk-root "${ANDROID_HOME:-$RUNNER_TEMP/tdlib-android-sdk}" "ndk;$NDK_VERSION" 'cmake;3.22.1'
       - name: Compile Android library
         if: steps.native-cache.outputs.cache-hit != 'true'
         env:
@@ -251,7 +248,9 @@ jobs:
       - name: Build Windows DLL
         if: matrix.target == 'windows-x64' && steps.native-cache.outputs.cache-hit != 'true'
         shell: pwsh
-        run: ./scripts/build-windows.ps1 -Source upstream
+        run: |
+          ./tests/test-windows-invocation.ps1
+          ./scripts/build-windows.ps1 -Source upstream
       - name: Install Apple build tools
         if: matrix.target == 'apple' && steps.native-cache.outputs.cache-hit != 'true'
         run: brew install gperf ninja cmake
@@ -299,6 +298,8 @@ jobs:
           overwrite: true
   android-package:
     name: Package Android SDK
+    permissions:
+      contents: write
     needs: [check, android]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -340,7 +341,7 @@ jobs:
           context: .
           file: docker/android.Dockerfile
           platforms: linux/amd64
-          outputs: type=image,name=${{ needs.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             TDLIB_COMMIT=${{ needs.check.outputs.commit }}
             TDLIB_VERSION=${{ needs.check.outputs.version }}
@@ -360,6 +361,20 @@ jobs:
           name: package-android
           path: release/*
           compression-level: 0
+          retention-days: 7
+          overwrite: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: upstream-check
+          path: upstream-check
+      - name: Publish verified Android image immediately
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-android.py --check upstream-check/check-result.json --payload android-payload --digest-file digest.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-publication
+          path: android-publication.json
           retention-days: 7
           overwrite: true
   packages:
@@ -390,7 +405,7 @@ jobs:
           context: .
           file: docker/packages.Dockerfile
           platforms: linux/amd64
-          outputs: type=image,name=${{ needs.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             TDLIB_COMMIT=${{ needs.check.outputs.commit }}
             TDLIB_VERSION=${{ needs.check.outputs.version }}

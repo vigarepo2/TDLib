@@ -6,6 +6,8 @@ The repository has two jobs: publish traceable TDLib packages and let consumers 
 
 `config/build.json` records the upstream source, image destination, and platform toolchains. Build recipes live in `docker/` and `scripts/`; GitHub Actions connects those recipes into the publishing workflow.
 
+If you change the image destination, also update `DOCKER_IMAGE` in the publishing workflow. The check rejects mismatched destinations. The image name stays in workflow configuration rather than crossing jobs as an output, because GitHub can suppress an output containing the secret Docker username.
+
 The daily check resolves the current commit of the configured official upstream ref, currently `tdlib/td`'s `master`. The source version comes from upstream's `CMakeLists.txt`. A version string can remain unchanged across many commits, so the full commit is required when deciding whether a build is new.
 
 The build fingerprint also accounts for the distribution's build inputs. A relevant packaging change therefore triggers a rebuild even when TDLib has not changed. An upstream network failure or an invalid manifest must be reported as a failure, not silently described as “no update.”
@@ -39,6 +41,8 @@ GitHub has one rolling release with the tag `latest`. Its downloadable assets ar
 | `tdlib-web.tar.gz` | Browser package and WebAssembly assets |
 
 The release title states the version read from official TDLib. If the selected source commit matches an upstream tag, release notes identify that tag. Otherwise the rolling GitHub release is marked as a prerelease and described as an upstream development snapshot. This identifies source provenance; it must not imply that this distribution is an official Telegram product.
+
+The Android packaging job promotes `android` independently after verifying its four ABIs, binding, package integrity, source commit, and build fingerprint. This makes the engine available to TelePlay without waiting for unrelated targets. Before advancing that tag it removes any previous global `manifest.json` success marker. It does not create a complete-release marker or replace GitHub release downloads. If another target fails, Android remains usable and the next scheduled check retries the incomplete publication; only the all-platform publisher restores `manifest.json` after everything succeeds. During this interval, Android can be newer than the other tags and release assets. Its embedded manifest and the `android-publication` Actions artifact identify the exact available engine.
 
 Publishing several Docker tags and GitHub assets is not a single atomic registry transaction. A failure partway through publication can leave destinations temporarily out of step. Keep failed runs, inspect the release manifest and image labels, and rerun the corrected publishing workflow. Consumers must validate the package they actually receive rather than trusting `latest` to mean a specific engine.
 
@@ -98,7 +102,7 @@ Code-write access alone may not include permission to update repository settings
 
 Rolling images are convenient distribution points. Applications should still state which native engine and binding they expect.
 
-TelePlay compares the Android manifest with its expected upstream commit, OpenSSL and NDK versions, Android API, ABI list, schema, wrapper, and file hashes. An unavailable or incompatible image can fall back to the app's existing trusted native bundle or pinned source build. A package that claims compatibility but fails integrity checks is an error rather than a reason to accept unverified files.
+TelePlay compares the Android manifest with its expected upstream commit, OpenSSL and NDK versions, Android API, ABI list, schema, wrapper, and file hashes. TelePlay also verifies the explicit static-runtime/compiler contract and Android system-library dependencies. An unavailable or incompatible image fails validation and points to this repository's producer workflow; TelePlay's APK workflows never compile TDLib or use native-release fallbacks. A package that claims compatibility but fails integrity checks is an error rather than a reason to accept unverified files.
 
 Changing `latest` alone is not an instruction to upgrade an application's binding. Coordinate an engine upgrade with application compilation, tests, and the relevant runtime checks. The same rule applies to external language adapters.
 

@@ -24,8 +24,11 @@ tar -xzf "$OPENSSL_ARCHIVE" --strip-components=1 -C "$CRYPTO_SOURCE"
   # Upstream's example pins OpenSSL 1.1.0l. Use our checksummed supported LTS
   # OpenSSL instead, compiled for Emscripten rather than a host Linux library.
   export CC=emcc CXX=em++ AR=emar RANLIB=emranlib
+  # emconfigure supplies absolute tool paths AND CROSS_COMPILE. OpenSSL would
+  # concatenate them unless the prefix is explicitly cleared at configure time.
   emconfigure ./Configure linux-generic32 no-asm no-shared no-threads no-dso \
     no-module no-engine no-tests no-ui-console no-secure-memory no-afalgeng no-sock no-async \
+    --cross-compile-prefix= \
     --prefix="$CRYPTO_INSTALL" --openssldir="$CRYPTO_INSTALL/ssl" --libdir=lib -Os
   emmake make -j"$PARALLEL" build_libs
   # Installing only headers/libraries avoids cross-executing OpenSSL tools.

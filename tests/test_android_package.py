@@ -89,6 +89,14 @@ class AndroidPackageTests(unittest.TestCase):
         self.create()
         self.assertEqual(first, (self.output / "manifest.json").read_bytes())
 
+    def test_native_contract_is_explicit_and_rejects_shared_runtime_or_changed_flags(self):
+        manifest = self.create()
+        self.assertEqual(package.NATIVE_CONTRACT, manifest["native_contract"])
+        manifest["native_contract"]["cxx_runtime"] = "c++_shared"
+        (self.output / "manifest.json").write_bytes(package.canonical(manifest))
+        with self.assertRaisesRegex(ValueError, "native build contract"):
+            package.verify(self.output)
+
     def test_tampered_bytes_and_checksum_document_are_rejected(self):
         self.create()
         checksums = self.output / "checksums.sha256"

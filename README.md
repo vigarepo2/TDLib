@@ -73,7 +73,9 @@ For a simpler Gradle integration, download `tdlib-android.aar` from the release,
 
 [TelePlay](https://github.com/vigarepo2/TelePlay) can reuse this public Android image when its source commit, toolchain, API level, schema, binding, and native checksums match the app's expected engine. It does not need Docker Hub credentials to pull a public image, subject to Docker Hub's public pull limits.
 
-If the image is not available or its newest engine differs from TelePlay's pinned engine, TelePlay uses its existing verified native package or source build. This protects an app from silently combining a new native library with old bindings. Compatible application-only changes reuse the engine; an actual engine update still requires a native build and app compatibility checks.
+The `android` tag is published as soon as all four Android ABIs and their package checks pass. TelePlay can start using it while Windows, Apple, web, or Linux builds are still running. The complete GitHub release and other rolling tags are published after all required targets pass.
+
+TelePlay's APK workflows require the public Android image. If it is unavailable or its newest engine differs from TelePlay's pinned engine, validation stops early with a link to this repository's build-and-publish workflow; the APK workflows never compile TDLib. This protects an app from silently combining a new native library with old bindings. Compatible application-only changes reuse the engine; an actual engine update still requires a native build and app compatibility checks.
 
 ## Other platforms and languages
 
