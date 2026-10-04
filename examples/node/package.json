@@ -1,0 +1,7 @@
+{
+  "name": "tdlib-json-example",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node main.mjs" },
+  "dependencies": { "koffi": "3.3.2" }
+}

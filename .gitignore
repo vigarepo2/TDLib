@@ -1,0 +1,12 @@
+/upstream/
+/dist/
+/.build/
+/.native-build/
+/.cache/
+/.venv/
+__pycache__/
+node_modules/
+*.pyc
+.env
+*.token
+/check-result.json

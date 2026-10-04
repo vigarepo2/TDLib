@@ -1,0 +1,444 @@
+name: Build and publish TDLib
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Force rebuild even when the published source and recipes are unchanged
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: tdlib-publish
+  cancel-in-progress: false
+env:
+  DOCKER_USER: ${{ secrets.DOCKER_USER || 'vs69' }}
+jobs:
+  check:
+    name: Check official upstream
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      changed: ${{ steps.upstream.outputs.changed }}
+      commit: ${{ steps.upstream.outputs.commit }}
+      version: ${{ steps.upstream.outputs.version }}
+      fingerprint: ${{ steps.upstream.outputs.fingerprint }}
+      image: ${{ steps.upstream.outputs.image }}
+      ndk: ${{ steps.upstream.outputs.ndk }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate workflow logic
+        run: python3 -m unittest discover -s tests -v
+      - name: Compare official source and build recipes with last successful publication
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          if [ "$FORCE" = true ]; then
+            python3 scripts/check-upstream.py --force
+          else
+            python3 scripts/check-upstream.py
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-check
+          path: check-result.json
+          retention-days: 7
+          overwrite: true
+      - name: Check publishing credentials before compiling
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          if [ -z "$DOCKER_PASSWORD" ]; then
+            echo '::error::Add repository secret DOCKER_PASSWORD before starting the first build.'
+            exit 1
+          fi
+      - name: Verify Docker Hub login before compiling
+        if: steps.upstream.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+  linux:
+    name: Linux ${{ matrix.variant }} / ${{ matrix.arch }}
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [debian, alpine]
+        include:
+          - variant: debian
+            file: docker/linux.Dockerfile
+          - variant: alpine
+            file: docker/alpine.Dockerfile
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          ref: ${{ needs.check.outputs.commit }}
+          path: upstream
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build runtime image into an untagged digest
+        id: runtime
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          target: runtime
+          pull: true
+          no-cache: ${{ inputs.force || false }}
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=${{ needs.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            TDLIB_COMMIT=${{ needs.check.outputs.commit }}
+            TDLIB_VERSION=${{ needs.check.outputs.version }}
+            BUILD_FINGERPRINT=${{ needs.check.outputs.fingerprint }}
+            BUILD_JOBS=2
+            CACHE_BUST=${{ inputs.force && github.run_id || 'stable' }}
+          cache-from: type=gha,scope=linux-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=linux-${{ matrix.variant }}-${{ matrix.arch }}
+      - name: Test final runtime image
+        env:
+          IMAGE: ${{ needs.check.outputs.image }}
+          DIGEST: ${{ steps.runtime.outputs.digest }}
+        run: docker run --rm "$IMAGE@$DIGEST" tdlib-info
+      - name: Build development image into an untagged digest
+        id: devel
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          target: devel
+          pull: true
+          no-cache: ${{ inputs.force || false }}
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=${{ needs.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            TDLIB_COMMIT=${{ needs.check.outputs.commit }}
+            TDLIB_VERSION=${{ needs.check.outputs.version }}
+            BUILD_FINGERPRINT=${{ needs.check.outputs.fingerprint }}
+            BUILD_JOBS=2
+            CACHE_BUST=${{ inputs.force && github.run_id || 'stable' }}
+          cache-from: type=gha,scope=linux-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=linux-${{ matrix.variant }}-${{ matrix.arch }}
+      - name: Test development image and record both digests
+        env:
+          IMAGE: ${{ needs.check.outputs.image }}
+          RUNTIME_DIGEST: ${{ steps.runtime.outputs.digest }}
+          DEVEL_DIGEST: ${{ steps.devel.outputs.digest }}
+        run: |
+          docker run --rm "$IMAGE@$DEVEL_DIGEST" tdlib-info
+          python3 -c 'import json,os; open("digests.json","w").write(json.dumps({"runtime":os.environ["RUNTIME_DIGEST"],"devel":os.environ["DEVEL_DIGEST"]}))'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-linux-${{ matrix.variant }}-${{ matrix.arch }}
+          path: digests.json
+          retention-days: 7
+          overwrite: true
+  android:
+    name: Android / ${{ matrix.abi }}
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          ref: ${{ needs.check.outputs.commit }}
+          path: upstream
+          persist-credentials: false
+      - uses: actions/cache@v4
+        if: ${{ !inputs.force }}
+        id: native-cache
+        with:
+          path: dist/android-${{ matrix.abi }}
+          key: android-${{ matrix.abi }}-${{ needs.check.outputs.commit }}-${{ needs.check.outputs.fingerprint }}
+      - uses: actions/setup-java@v4
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install native build tools
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build gperf perl build-essential curl python3 git binutils
+      - uses: android-actions/setup-android@v3
+        if: steps.native-cache.outputs.cache-hit != 'true'
+      - name: Install pinned Android NDK
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        env:
+          NDK_VERSION: ${{ needs.check.outputs.ndk }}
+        run: sdkmanager "ndk;$NDK_VERSION"
+      - name: Compile Android library
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        env:
+          ABI: ${{ matrix.abi }}
+          BUILD_JOBS: '2'
+        run: |
+          bash scripts/build-android.sh --source upstream --abi "$ABI" --output "dist/android-$ABI"
+          python3 scripts/package-release.py record "dist/android-$ABI"
+      - name: Verify cached or freshly compiled package
+        env:
+          ABI: ${{ matrix.abi }}
+        run: python3 scripts/package-release.py verify "dist/android-$ABI"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-android-${{ matrix.abi }}
+          path: dist/android-${{ matrix.abi }}/
+          compression-level: 1
+          retention-days: 7
+          overwrite: true
+  portable:
+    name: ${{ matrix.target }} package
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-x64
+            runner: windows-2022
+          - target: apple
+            runner: macos-15
+          - target: web
+            runner: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          ref: ${{ needs.check.outputs.commit }}
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        if: ${{ !inputs.force }}
+        id: native-cache
+        with:
+          path: dist/${{ matrix.target }}
+          key: portable-${{ matrix.target }}-${{ needs.check.outputs.commit }}-${{ needs.check.outputs.fingerprint }}
+      - name: Build Windows DLL
+        if: matrix.target == 'windows-x64' && steps.native-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Source upstream
+      - name: Install Apple build tools
+        if: matrix.target == 'apple' && steps.native-cache.outputs.cache-hit != 'true'
+        run: brew install gperf ninja cmake
+      - name: Build Apple XCFramework
+        if: matrix.target == 'apple' && steps.native-cache.outputs.cache-hit != 'true'
+        env:
+          TDLIB_JOBS: '3'
+        run: bash scripts/build-apple.sh --source upstream
+      - name: Install WebAssembly build tools
+        if: matrix.target == 'web' && steps.native-cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build gperf perl make libssl-dev zlib1g-dev python3 g++ curl
+      - uses: mymindstorm/setup-emsdk@v14
+        if: matrix.target == 'web' && steps.native-cache.outputs.cache-hit != 'true'
+        with:
+          version: '3.1.1'
+          actions-cache-folder: emsdk-cache
+      - uses: actions/setup-node@v4
+        if: matrix.target == 'web' && steps.native-cache.outputs.cache-hit != 'true'
+        with:
+          node-version: '22'
+      - name: Build browser package
+        if: matrix.target == 'web' && steps.native-cache.outputs.cache-hit != 'true'
+        env:
+          TDLIB_JOBS: '2'
+        run: bash scripts/build-web.sh --source upstream
+      - name: Record verified native output
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: python scripts/package-release.py record "dist/$TARGET"
+      - name: Verify cache and archive package
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          python scripts/package-release.py verify "dist/$TARGET"
+          python scripts/package-release.py archive "dist/$TARGET" --output "release/tdlib-$TARGET.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.target }}
+          path: release/tdlib-${{ matrix.target }}.tar.gz
+          compression-level: 0
+          retention-days: 7
+          overwrite: true
+  android-package:
+    name: Package Android SDK
+    needs: [check, android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          ref: ${{ needs.check.outputs.commit }}
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-android-*
+          path: merged
+          merge-multiple: true
+      - name: Verify all ABIs and generate matching Java binding
+        env:
+          FINGERPRINT: ${{ needs.check.outputs.fingerprint }}
+        run: |
+          python3 scripts/package-android.py create --source upstream --libraries merged/jniLibs --output android-payload --build-fingerprint "$FINGERPRINT"
+          python3 scripts/package-android.py aar --payload android-payload --output release/tdlib-android.aar
+          python3 scripts/package-release.py archive android-payload --output release/tdlib-android.tar.gz
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build Android package carrier into an untagged digest
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/android.Dockerfile
+          platforms: linux/amd64
+          outputs: type=image,name=${{ needs.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            TDLIB_COMMIT=${{ needs.check.outputs.commit }}
+            TDLIB_VERSION=${{ needs.check.outputs.version }}
+            BUILD_FINGERPRINT=${{ needs.check.outputs.fingerprint }}
+      - name: Record image digest
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: printf '%s\n' "$DIGEST" > digest.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-android
+          path: digest.txt
+          retention-days: 7
+          overwrite: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-android
+          path: release/*
+          compression-level: 0
+          retention-days: 7
+          overwrite: true
+  packages:
+    name: Package all platform downloads
+    needs: [check, android-package, portable]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: packages-payload
+          merge-multiple: true
+      - name: Record package checksums
+        run: python3 scripts/package-release.py record packages-payload
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build all-platform carrier into an untagged digest
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/packages.Dockerfile
+          platforms: linux/amd64
+          outputs: type=image,name=${{ needs.check.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            TDLIB_COMMIT=${{ needs.check.outputs.commit }}
+            TDLIB_VERSION=${{ needs.check.outputs.version }}
+            BUILD_FINGERPRINT=${{ needs.check.outputs.fingerprint }}
+      - name: Record image digest
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: printf '%s\n' "$DIGEST" > digest.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-packages
+          path: digest.txt
+          retention-days: 7
+          overwrite: true
+  publish:
+    name: Promote tested images and replace rolling release
+    needs: [check, linux, android-package, portable, packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: collected
+          pattern: '{upstream-check,digests-linux-*,digest-*,package-*}'
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Publish verified rolling tags and packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-release.py --artifacts collected --release release
+  documentation:
+    name: Synchronize Docker Hub documentation
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Update Docker Hub overview from README
+        env:
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: python3 scripts/publish-docs.py

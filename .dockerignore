@@ -1,0 +1,10 @@
+.git
+.github
+.build
+.native-build
+.cache
+.venv
+**/__pycache__
+**/node_modules
+.env
+*.token
