@@ -7,7 +7,7 @@ This repository packages software from the projects below. Their authors retain 
 | TDLib | [tdlib/td](https://github.com/tdlib/td) | [Boost Software License 1.0](https://github.com/tdlib/td/blob/master/LICENSE_1_0.txt) |
 | OpenSSL 3 | [openssl/openssl](https://github.com/openssl/openssl) | [Apache License 2.0](https://github.com/openssl/openssl/blob/master/LICENSE.txt) |
 | zlib | [madler/zlib](https://github.com/madler/zlib) | [zlib license](https://github.com/madler/zlib/blob/develop/LICENSE) |
-| SQLCipher code distributed with TDLib | [tdlib/td third-party code](https://github.com/tdlib/td/tree/master/td/sqlite) | License supplied with the bundled SQLCipher source |
+| SQLCipher code distributed with TDLib | [tdlib/td third-party code](https://github.com/tdlib/td/tree/master/sqlite) | License supplied with the bundled SQLCipher source |
 | Android NDK runtime components | [Android NDK](https://developer.android.com/ndk) | Applicable notices included in the NDK distribution |
 | Emscripten runtime | [emscripten-core/emscripten](https://github.com/emscripten-core/emscripten) | [MIT / University of Illinois-NCSA licenses](https://github.com/emscripten-core/emscripten/blob/main/LICENSE) |
 

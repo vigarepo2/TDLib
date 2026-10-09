@@ -2,8 +2,11 @@
 """Exercise the real TDLib JSON ABI without an account or network connection."""
 
 import argparse
+from contextlib import nullcontext
 import ctypes
 import json
+import os
+from pathlib import Path
 import sys
 
 
@@ -52,7 +55,9 @@ def main() -> int:
     parser.add_argument("--commit", default="")
     args = parser.parse_args()
     try:
-        values = verify(args.library, args.version, args.commit)
+        directory = os.add_dll_directory(str(Path(args.library).resolve().parent)) if os.name == "nt" else nullcontext()
+        with directory:
+            values = verify(args.library, args.version, args.commit)
     except (OSError, RuntimeError, ValueError, AttributeError) as error:
         print(f"TDLib smoke test failed: {error}", file=sys.stderr)
         return 1

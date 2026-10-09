@@ -9,8 +9,15 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $Root = Split-Path -Parent $PSScriptRoot
-$Config = Get-Content (Join-Path $Root "config/build.json") -Raw | ConvertFrom-Json
-. (Join-Path $PSScriptRoot "Invoke-Checked.ps1")
+$Config = Get-Content (Join-Path $Root "build.json") -Raw | ConvertFrom-Json
+# Keep native switches inside an explicit array: PowerShell must not bind -S,
+# -B or other tool arguments as parameters of this wrapper function.
+function Invoke-Checked {
+    param([Parameter(Mandatory = $true)][string]$Program,
+          [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Arguments)
+    & $Program @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "$Program failed (exit $LASTEXITCODE)" }
+}
 if (-not $IsWindows -or -not [Environment]::Is64BitOperatingSystem) {
     throw "This recipe requires a 64-bit Windows host and Visual Studio 2022 C++ tools."
 }
@@ -54,7 +61,7 @@ Invoke-Checked -Program cmake -Arguments @("--build", $Build, "--config", "Relea
 Invoke-Checked -Program cmake -Arguments @("--install", $Build, "--config", "Release")
 $Library = Join-Path $Output "bin/tdjson.dll"
 if (-not (Test-Path $Library)) { throw "Expected tdjson.dll was not produced" }
-Invoke-Checked -Program python -Arguments @((Join-Path $PSScriptRoot "smoke-portable.py"), $Library)
+Invoke-Checked -Program python -Arguments @((Join-Path $PSScriptRoot "verify-json.py"), $Library, "--commit", $Commit)
 $Licenses = Join-Path $Output "licenses"
 New-Item -ItemType Directory -Force -Path $Licenses | Out-Null
 foreach ($Port in @("openssl", "zlib")) {
@@ -67,7 +74,7 @@ $BuildInfo = Join-Path $WorkDir "build-info.json"
     vcpkg = @{release = $Config.portable.vcpkg_release; commit = $VcpkgCommit; triplet = "x64-windows-static-md"}
     dependencies = @{openssl = (Get-Content (Join-Path $Vcpkg "ports/openssl/vcpkg.json") -Raw | ConvertFrom-Json); zlib = (Get-Content (Join-Path $Vcpkg "ports/zlib/vcpkg.json") -Raw | ConvertFrom-Json)}
     runtime = "Windows x64 with Microsoft Visual C++ 2015-2022 x64 Redistributable"
-    smoke_test = "Loaded tdjson.dll and executed getTextEntities without a Telegram account"
+    smoke_test = "Loaded tdjson.dll, verified the source commit and executed the offline JSON API"
 } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $BuildInfo
-Invoke-Checked -Program python -Arguments @((Join-Path $PSScriptRoot "package-common.py"), "--source", $Source, "--root", $Output, "--platform", "windows-x64", "--build-json", $BuildInfo)
+Invoke-Checked -Program python -Arguments @((Join-Path $PSScriptRoot "package.py"), "manifest", "--source", $Source, "--root", $Output, "--platform", "windows-x64", "--build-json", $BuildInfo)
 Write-Host "Windows x64 package ready: $Output"

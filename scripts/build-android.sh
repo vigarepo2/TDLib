@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 ABI=all
 SOURCE=
-CONFIG="$ROOT/config/build.json"
+CONFIG="$ROOT/build.json"
 OUTPUT="$ROOT/dist/android"
 PARALLEL=2
 CACHE=${TDLIB_BUILD_ROOT:-"$ROOT/.native-build"}
@@ -13,7 +13,7 @@ CACHE=${TDLIB_BUILD_ROOT:-"$ROOT/.native-build"}
 usage() {
   cat <<'USAGE'
 Usage: scripts/build-android.sh --source checkout --abi all|armeabi-v7a|arm64-v8a|x86|x86_64
-                                --output directory [--config config/build.json]
+                                --output directory [--config build.json]
                                 [--parallel 1|2|3|4] [--work-dir directory]
 Requires a clean official TDLib checkout, Linux x86_64, the configured Android NDK,
 CMake >= 3.22, Ninja, a host C++ compiler, gperf, Perl, Make, Curl, and Python 3.

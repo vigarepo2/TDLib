@@ -43,7 +43,7 @@ portable_arguments() {
 }
 
 config_get() {
-  python3 - "$ROOT/config/build.json" "$1" <<'PY'
+  python3 - "$ROOT/build.json" "$1" <<'PY'
 import json, sys
 value = json.load(open(sys.argv[1]))
 for field in sys.argv[2].split('.'):

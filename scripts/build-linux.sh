@@ -30,7 +30,7 @@ cmake --build "$build_dir" --parallel "$build_jobs"
 cmake --install "$build_dir" --prefix "$prefix"
 # Strip only shared objects. Static archives retain their linkable object code.
 find "$prefix/lib" -maxdepth 1 -type f -name 'libtdjson.so*' -exec strip --strip-unneeded {} +
-python3 /scripts/smoke-json.py "$prefix/lib/libtdjson.so" \
+python3 /scripts/verify-json.py "$prefix/lib/libtdjson.so" \
     --version "$TDLIB_VERSION" --commit "$TDLIB_COMMIT"
 
 mkdir -p "$prefix/bin" "$prefix/share/tdlib/licenses" /opt/tdlib-runtime/lib
