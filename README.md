@@ -120,7 +120,7 @@ To extract all downloads through Docker, create a container from `vs69/tdlib:pac
 
 ## Updates and verification
 
-The publishing workflow checks official upstream `master` daily at **04:23 UTC**. It rebuilds when the upstream commit or build inputs change, or when a maintainer selects **Force rebuild**. Unchanged publications skip compilation. Successful scheduled no-change checks are cleaned from Actions history; actual builds, failures and manual runs remain available.
+The publishing workflow runs automatically when build inputs change on `main` and checks official upstream `master` daily at **04:23 UTC (09:53 IST)**. It rebuilds when the upstream commit or build inputs change. No manual run is needed for routine updates; **Force rebuild** remains available for recovery. Unchanged publications skip compilation. Successful scheduled no-change checks are cleaned from Actions history; actual builds, failures and manual runs remain available.
 
 Tags remain `latest`, `debian`, `alpine`, `dev`, `debian-dev`, `alpine-dev`, `android` and `packages`. No version-specific Docker tags are created. The GitHub release also uses `latest`. An upstream snapshot without an exact official tag is marked as a prerelease.
 
