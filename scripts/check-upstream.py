@@ -7,6 +7,7 @@ import json
 import os
 import pathlib
 import re
+import runpy
 import urllib.error
 from workflow_common import GitHub
 
@@ -16,9 +17,9 @@ SHA = re.compile(r"^[0-9a-f]{40}$")
 
 def fingerprint(root):
     paths = []
-    for folder in ("config", "docker", "scripts"):
+    for folder in ("docker", "scripts"):
         paths.extend(p for p in (root / folder).rglob("*") if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc")
-    paths.extend(root / name for name in (".github/workflows/build-and-publish.yml", "LICENSE", "THIRD_PARTY_NOTICES.md", ".dockerignore"))
+    paths.extend(root / name for name in ("build.json", ".github/workflows/build-and-publish.yml", "LICENSE", "THIRD_PARTY_NOTICES.md", ".dockerignore"))
     digest = hashlib.sha256()
     for path in sorted(paths):
         if path.exists():
@@ -57,14 +58,37 @@ def requires_build(previous, commit, recipe, force=False):
     return bool(force or not complete_publication(previous) or previous.get("upstream", {}).get("commit") != commit or previous.get("build", {}).get("fingerprint") != recipe)
 
 
+def configuration():
+    path = ROOT / "build.json"
+    config = json.loads(path.read_text())
+    if config.get("schema") != 1 or config["upstream"]["repository"] != "tdlib/td":
+        raise ValueError("Expected official tdlib/td source and configuration schema 1")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", config["upstream"]["ref"]):
+        raise ValueError("Invalid upstream ref")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*", config["docker"]["image"]):
+        raise ValueError("Expected a Docker Hub namespace/repository")
+    if os.environ.get("DOCKER_IMAGE", config["docker"]["image"]) != config["docker"]["image"]:
+        raise ValueError("Workflow DOCKER_IMAGE and build.json must name the same repository")
+    runpy.run_path(str(ROOT / "scripts/package-android.py"))["pins"](path)
+    portable = config["portable"]
+    if not SHA.fullmatch(portable["vcpkg_commit"]):
+        raise ValueError("vcpkg must be pinned to an exact source commit")
+    for name in ("emsdk_version", "macos_minimum", "ios_minimum"):
+        if not re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", portable[name]):
+            raise ValueError(f"Invalid portable toolchain setting: {name}")
+    return config
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--validate", action="store_true", help="Validate build pins offline, without credentials")
     parser.add_argument("--output", default="check-result.json")
     args = parser.parse_args()
-    config = json.loads((ROOT / "config/build.json").read_text())
-    if os.environ.get("DOCKER_IMAGE", config["docker"]["image"]) != config["docker"]["image"]:
-        raise ValueError("Workflow DOCKER_IMAGE and config/build.json must name the same repository")
+    config = configuration()
+    if args.validate:
+        print("Build configuration is valid: official source, pinned toolchains and all four Android ABIs.")
+        return
     api = GitHub()
     upstream = config["upstream"]["repository"]
     ref = config["upstream"]["ref"]
@@ -98,7 +122,7 @@ def main():
     pathlib.Path(args.output).write_text(json.dumps(result, indent=2) + "\n")
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-            for name, value in {"changed": str(changed).lower(), "commit": commit, "version": version, "fingerprint": recipe, "ndk": config["android"]["ndk_version"]}.items():
+            for name, value in {"changed": str(changed).lower(), "commit": commit, "version": version, "fingerprint": recipe, "ndk": config["android"]["ndk_version"], "emsdk": config["portable"]["emsdk_version"]}.items():
                 print(f"{name}={value}", file=output)
     print(f"Official TDLib {version} at {commit}; {'build required' if changed else 'already published, no build needed'}")
 

@@ -10,3 +10,11 @@ node_modules/
 .env
 *.token
 /check-result.json
+/android-payload/
+/packages-payload/
+/android-publication.json
+/collected/
+/merged/
+/release/
+/upstream-check/
+/digest.txt

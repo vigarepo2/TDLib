@@ -88,7 +88,7 @@ xcodebuild -create-xcframework \
   -library "$OUTPUT/ios/lib/libtdjson.dylib" -headers "$OUTPUT/include" \
   -library "$OUTPUT/ios-simulator/lib/libtdjson.dylib" -headers "$OUTPUT/include" \
   -output "$OUTPUT/TDLib.xcframework"
-python3 "$ROOT/scripts/smoke-portable.py" "$OUTPUT/macos/lib/libtdjson.dylib"
+python3 "$ROOT/scripts/verify-json.py" "$OUTPUT/macos/lib/libtdjson.dylib" --commit "$TDLIB_COMMIT"
 cp "$WORK/openssl-macos-arm64/LICENSE.txt" "$OUTPUT/licenses/OpenSSL-Apache-2.0.txt"
 cp "$SOURCE/td/generate/scheme/td_api.tl" "$OUTPUT/td_api.tl"
 python3 - "$WORK/build-info.json" "$OPENSSL_VERSION" "$MACOS_MINIMUM" "$IOS_MINIMUM" <<'PY'
@@ -101,5 +101,5 @@ pathlib.Path(sys.argv[1]).write_text(json.dumps({
     'smoke_test': 'macOS host dylib loaded and JSON API executed; every slice architecture checked'
 }, indent=2) + '\n')
 PY
-python3 "$ROOT/scripts/package-common.py" --source "$SOURCE" --root "$OUTPUT" --platform apple --build-json "$WORK/build-info.json"
+python3 "$ROOT/scripts/package.py" manifest --source "$SOURCE" --root "$OUTPUT" --platform apple --build-json "$WORK/build-info.json"
 echo "Apple package ready: $OUTPUT"

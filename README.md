@@ -1,59 +1,83 @@
-# TDLib, ready for your next build
+# TDLib
 
-**Reusable Telegram libraries for apps, bots, and services. Built from upstream TDLib; distributed through Docker Hub and GitHub.**
+Prebuilt TDLib libraries for Linux, Android, Windows, macOS, iOS and WebAssembly.
 
 [![Build and publish](https://github.com/vigarepo2/TDLib/actions/workflows/build-and-publish.yml/badge.svg)](https://github.com/vigarepo2/TDLib/actions/workflows/build-and-publish.yml)
-[![License: BSL-1.0](https://img.shields.io/badge/license-BSL--1.0-blue)](https://github.com/vigarepo2/TDLib/blob/main/LICENSE)
+[![Validate](https://github.com/vigarepo2/TDLib/actions/workflows/validate.yml/badge.svg)](https://github.com/vigarepo2/TDLib/actions/workflows/validate.yml)
+[![License](https://img.shields.io/badge/license-BSL--1.0-blue)](https://github.com/vigarepo2/TDLib/blob/main/LICENSE)
 
-[Docker Hub](https://hub.docker.com/r/vs69/tdlib) · [Download packages](https://github.com/vigarepo2/TDLib/releases/tag/latest) · [Quick start](https://github.com/vigarepo2/TDLib/blob/main/docs/QUICKSTART.md) · [Platform guide](https://github.com/vigarepo2/TDLib/blob/main/docs/platforms.md) · [Actions](https://github.com/vigarepo2/TDLib/actions)
+[Docker Hub](https://hub.docker.com/r/vs69/tdlib) · [Downloads](https://github.com/vigarepo2/TDLib/releases/tag/latest) · [Build history](https://github.com/vigarepo2/TDLib/actions) · [Official TDLib documentation](https://core.telegram.org/tdlib)
 
-TDLib is Telegram's library for networking, encryption, local storage, and updates. This project compiles it into reusable packages so your application does not have to rebuild the native engine every time you change its interface or business logic.
+Use these packages to integrate Telegram's native engine without compiling it in every application build. Each publication records its upstream commit, build configuration and checksums. This is an independent distribution of [tdlib/td](https://github.com/tdlib/td), maintained by [vigarepo2](https://github.com/vigarepo2).
 
-Think of these packages as the engine your application uses. They do not include a Telegram interface, bot implementation, HTTP API, or streaming server. Those features belong in the application built on top of TDLib.
+**Contents:** [Packages](https://github.com/vigarepo2/TDLib#packages) · [Linux](https://github.com/vigarepo2/TDLib#linux) · [Android](https://github.com/vigarepo2/TDLib#android) · [Windows, Apple and web](https://github.com/vigarepo2/TDLib#windows-apple-and-web) · [Updates](https://github.com/vigarepo2/TDLib#updates-and-verification) · [Publishing](https://github.com/vigarepo2/TDLib#publishing)
 
-This is an independent distribution maintained by [vigarepo2](https://github.com/vigarepo2), not an official Telegram publication. Packages record the exact upstream version and commit. A platform becomes available after its build and checks succeed; consult the latest successful publishing run and release manifest for what has actually been published.
+## Packages
 
-## Choose your package
+| Docker tag | Platforms | Contents |
+| --- | --- | --- |
+| `latest`, `debian` | Linux amd64 / arm64 | Debian runtime, JSON shared library |
+| `alpine` | Linux amd64 / arm64 | Alpine runtime, JSON shared library |
+| `dev`, `debian-dev` | Linux amd64 / arm64 | Debian runtime, headers, static libraries and CMake exports |
+| `alpine-dev` | Linux amd64 / arm64 | Alpine runtime, headers, static libraries and CMake exports |
+| `android` | arm64-v8a / armeabi-v7a / x86 / x86_64 | JSON C and Java/JNI libraries, headers, sources and manifest |
+| `packages` | Android, Windows x64, macOS, iOS, browser | Platform archives and checksums |
 
-All images use the public repository **`vs69/tdlib`**. The word after the colon selects a package, not a TDLib version.
+All tags use **`vs69/tdlib`**. The `android` and `packages` images carry files for extraction with `docker cp`; they contain no runnable application. Direct downloads are available from the [rolling release](https://github.com/vigarepo2/TDLib/releases/tag/latest).
 
-| Image | Intended use | Targets | Main contents |
-| --- | --- | --- | --- |
-| `vs69/tdlib:latest` or `:debian` | Run an application in Debian Linux | Linux amd64, arm64 | JSON shared library and runtime dependencies |
-| `vs69/tdlib:alpine` | Run an application in Alpine Linux | Linux amd64, arm64 | JSON shared library and musl-compatible dependencies |
-| `vs69/tdlib:dev` or `:debian-dev` | Compile code against TDLib on Debian | Linux amd64, arm64 | Runtime, headers, static libraries, CMake package, build tools |
-| `vs69/tdlib:alpine-dev` | Compile code against TDLib on Alpine | Linux amd64, arm64 | Runtime, headers, static libraries, CMake package, build tools |
-| `vs69/tdlib:android` | Supply native libraries to an Android app build | arm64-v8a, armeabi-v7a, x86, x86_64 | Android JSON/JNI libraries, Java source, headers, manifests |
-| `vs69/tdlib:packages` | Extract packages for other platforms | Windows x64; macOS/iOS; browser | Platform archives and checksums |
+TDLib supplies networking, encryption, local storage and updates. Your application supplies its interface, Telegram authorization and session handling. These packages do not start a bot, HTTP service or streaming server.
 
-The Android and packages images are **file containers**: create a container and copy its files out. They do not run an application. Windows, Apple, browser, and Android downloads are also available directly from the [rolling GitHub release](https://github.com/vigarepo2/TDLib/releases/tag/latest); Docker is optional for those downloads.
-
-One project can provide these different packages. One native library cannot run on every operating system or CPU. A Linux image running in Docker Desktop on Windows or macOS still contains Linux libraries.
-
-## Try the Linux image
-
-Install Docker, then run:
+## Linux
 
 ```sh
 docker pull vs69/tdlib:latest
 docker run --rm vs69/tdlib:latest
 ```
 
-The second command prints TDLib's version, commit, and a small text-processing check, then exits. It requires no Telegram account or bot token and does not start a server.
+The command loads TDLib, prints its version and commit, checks the JSON interface, and exits without a Telegram login.
 
-The runtime library is installed at `/usr/local/lib/libtdjson.so`. The image runs as the non-root `tdlib` user and provides `/data` as a writable working directory.
+| Setting | Value |
+| --- | --- |
+| Shared library | `/usr/local/lib/libtdjson.so` |
+| Library environment variable | `TDLIB_LIBRARY_PATH` |
+| Runtime user | `tdlib` — UID/GID 10001 |
+| Working directory | `/data` |
+| Provenance | `/usr/local/share/tdlib/build.json` |
+| Notices | `/usr/local/share/tdlib/licenses/` |
+| Debian base | Debian 12 / bookworm, glibc 2.36 |
+| Alpine base | Alpine 3.23, musl |
 
-Use the image as a base for your own service, or copy the library into a compatible Linux image. The [language examples](https://github.com/vigarepo2/TDLib/tree/main/examples) show how to connect an application. The development variants include `/usr/local/include` and the installed CMake package for consumers that compile native code.
+Use the matching runtime image as your application's base. Persist session data in a writable volume. When copying the library elsewhere, match its CPU architecture, libc, C++ runtime, OpenSSL and zlib dependencies. Debian and Alpine libraries are not interchangeable.
 
-### Linux compatibility
+The development images include compilers and TDLib's CMake package. C/C++ applications can use `find_package(Td REQUIRED CONFIG)` and link `Td::TdJson` or `Td::TdJsonStatic`. Other native languages can use a compatible JSON binding or FFI adapter; keep that adapter aligned with the packaged API schema.
 
-The Debian build uses **Debian 12/bookworm, glibc 2.36**. The Alpine build uses **Alpine 3.23 and musl**. Both use the GCC C++ runtime, OpenSSL 3, and zlib. Debian and Alpine libraries are not interchangeable.
+## Android
 
-Keeping the supplied runtime image as your application's base is the simplest way to keep its dependencies aligned. When copying libraries into another image or onto a host, match CPU architecture, libc, required symbol versions, OpenSSL, zlib, and the C++ runtime. The word “Linux” alone is not enough to establish compatibility.
+The Android package targets **API 24+**, uses **NDK 28.2.13676358** and **OpenSSL 3.5.9**, and checks native ELF alignment for **16 KB pages** across all four ABIs. The consuming application's Gradle configuration and finished APK must also support the devices and page sizes it targets.
 
-## Use the Android package
+### Gradle integration
 
-The Android package contains all four ABIs, built for **Android API 24+**, **NDK 28.2.13676358**, **OpenSSL 3.5.9**, and **16 KB native page alignment**. It includes both the JSON C interface and the JSON Java/JNI adapter.
+Download [`tdlib-android.aar`](https://github.com/vigarepo2/TDLib/releases/download/latest/tdlib-android.aar), place it in `app/libs`, and add:
+
+```kotlin
+dependencies {
+    implementation(files("libs/tdlib-android.aar"))
+}
+```
+
+Set `minSdk` to at least 24. The AAR contains `org.drinkless.tdlib.JsonClient`, four JNI libraries, consumer R8 rules and license assets. Do not also copy the same classes or JNI libraries into the application.
+
+```kotlin
+import org.drinkless.tdlib.JsonClient
+
+val version = JsonClient.execute("""{"@type":"getOption","name":"version"}""")
+```
+
+This is the **JSON Java interface**, which exchanges JSON strings. The separate generated `TdApi` class interface is not included. Most TDLib requests are asynchronous: receive updates on a dedicated thread and handle authorization states in the application. Do not call `JsonClient.receive` concurrently from multiple threads or block the Android UI thread.
+
+### Native files
+
+For C/FFI integration or manual JNI packaging:
 
 ```sh
 docker pull --platform linux/amd64 vs69/tdlib:android
@@ -61,75 +85,65 @@ docker create --platform linux/amd64 --name tdlib-android vs69/tdlib:android
 mkdir -p tdlib-android
 docker cp tdlib-android:/opt/tdlib/android/. ./tdlib-android/
 docker rm tdlib-android
+(cd tdlib-android && sha256sum -c checksums.sha256)
 ```
 
-`--platform linux/amd64` selects the file container even on an ARM computer. The container is never executed, so no CPU emulation is needed; it still contains Android libraries for all four ABIs.
+The file container uses `linux/amd64` on every host; its contents still include all Android ABIs. Nothing is executed during extraction. The same payload is available as [`tdlib-android.tar.gz`](https://github.com/vigarepo2/TDLib/releases/download/latest/tdlib-android.tar.gz).
 
-For a Java/Kotlin application, use `sources/JsonClient.java` and the matching `jniLibs/<ABI>/libtdjsonjava.so` files. Applications using the C interface use `libtdjson.so` and the supplied headers. Keep bindings and native libraries from the same package. See the [Android integration guide](https://github.com/vigarepo2/TDLib/blob/main/docs/android.md) for the complete layout and integration details.
-
-For a simpler Gradle integration, download `tdlib-android.aar` from the release, place it in `app/libs`, and add `implementation(files("libs/tdlib-android.aar"))` to the app's Kotlin Gradle dependencies. The AAR already contains the JSON Java adapter and all four JNI libraries; do not also copy those files into the same app. This adapter exchanges JSON strings and does not provide the separate generated `TdApi` Java class API.
-
-### TelePlay
-
-[TelePlay](https://github.com/vigarepo2/TelePlay) can reuse this public Android image when its source commit, toolchain, API level, schema, binding, and native checksums match the app's expected engine. It does not need Docker Hub credentials to pull a public image, subject to Docker Hub's public pull limits.
-
-The `android` tag is published as soon as all four Android ABIs and their package checks pass. TelePlay can start using it while Windows, Apple, web, or Linux builds are still running. The complete GitHub release and other rolling tags are published after all required targets pass.
-
-TelePlay's APK workflows require the public Android image. If it is unavailable or its newest engine differs from TelePlay's pinned engine, validation stops early with a link to this repository's build-and-publish workflow; the APK workflows never compile TDLib. This protects an app from silently combining a new native library with old bindings. Compatible application-only changes reuse the engine; an actual engine update still requires a native build and app compatibility checks.
-
-## Other platforms and languages
-
-The [platform guide](https://github.com/vigarepo2/TDLib/blob/main/docs/platforms.md) covers Windows DLLs, Apple frameworks, and browser WebAssembly. These packages have separate build recipes and checks.
-
-| Language or application | Integration route |
+| Path | Purpose |
 | --- | --- |
-| Python, Node.js, Ruby, PHP, Rust, Go, .NET, and other languages with native-library support | Use the JSON C interface through a compatible binding or foreign-function interface |
-| C/C++ | Use the JSON interface and headers; development images also contain the installed static libraries and CMake configuration |
-| Android Java/Kotlin | Use the packaged JSON Java/JNI adapter and Android libraries |
-| Native Windows applications | Use the Windows package; match your language adapter to its JSON interface |
-| macOS/iOS applications | Use the Apple libraries or XCFramework with an application-side adapter |
-| Browser applications | Use the `tdweb` package and its WebAssembly assets |
+| `jniLibs/<ABI>/libtdjson.so` | Native JSON C interface |
+| `jniLibs/<ABI>/libtdjsonjava.so` | Self-contained JSON Java/JNI interface |
+| `sources/JsonClient.java` | Matching upstream Java adapter |
+| `sources/td_api.tl` | Matching API schema |
+| `include/td/telegram/` | C headers |
+| `manifest.json`, `checksums.sha256` | Source identity, build contract and file integrity |
+| `licenses/` | Included component notices |
 
-A language binding is the adapter between your language and TDLib. The presence of a JSON interface does not mean every third-party adapter or framework version has been tested by this project. The package does not turn native TDLib into a browser library; use the dedicated web build there.
+Manual Java/Kotlin integration needs `JsonClient.java` and `libtdjsonjava.so`, with R8 rules preserving `org.drinkless.tdlib.JsonClient` and its nested classes. It does not also need `libtdjson.so`. Keep native libraries, bindings and schemas from the same package.
 
-## Updates without a pile of version tags
+The Android Docker tag is published as soon as its package checks pass. The AAR and archive on GitHub update when the complete platform release succeeds, so their source commits can temporarily differ. Consumers such as [TelePlay](https://github.com/vigarepo2/TelePlay) should use a verified image digest and compare the package manifest with their expected engine inputs.
 
-The **Build and publish TDLib** workflow checks the official [`tdlib/td` source](https://github.com/tdlib/td) daily. It compares the upstream commit and this project's build inputs with the last published manifest.
+## Windows, Apple and web
 
-- **No relevant change:** compilation and publishing are skipped.
-- **New source or changed build inputs:** the target packages are rebuilt and checked before their rolling packages are published.
-- **Manual rebuild:** maintainers can select **Force rebuild** when a rebuild is needed with the same recorded inputs.
+Download the appropriate archive from the [release page](https://github.com/vigarepo2/TDLib/releases/tag/latest), then extract it into its own directory.
 
-The public tags stay simple: `latest`, `debian`, `alpine`, `dev`, `debian-dev`, `alpine-dev`, `android`, and `packages`. No per-version Docker tags are created. The single GitHub release is also named `latest`; its title and manifest identify the upstream version and full source commit used for that build. Release notes identify a matching upstream tag when present; other upstream snapshots are marked as prereleases.
+| Download | Contents and requirements |
+| --- | --- |
+| `tdlib-windows-x64.tar.gz` | `bin/tdjson.dll`, headers and import library. Requires the Microsoft Visual C++ x64 Redistributable; OpenSSL and zlib are linked statically. |
+| `tdlib-apple.tar.gz` | `TDLib.xcframework`, C headers and dylibs: macOS 11+ universal, iOS 13+ arm64, and universal iOS simulator. The consuming Xcode app handles embedding and signing. |
+| `tdlib-web.tar.gz` | Upstream `tdweb-*.tgz`, `dist/`, raw WebAssembly, wrapper instructions and dependency lock. Install the local npm archive and serve every `dist/` asset together over HTTPS. |
 
-TDLib can change its source without changing its version number. For that reason, a commit and build fingerprint are recorded as well as the version. Tracking upstream `master` is not the same as waiting for an official stable release announcement.
+Windows ARM64, Windows x86, watchOS, tvOS, visionOS and Catalyst are not included. Native packages require platform-specific bindings; the browser uses the dedicated `tdweb` wrapper. Serve `.wasm` as `application/wasm` and follow the bundled `TDWEB-USAGE.md` for workers and browser storage.
 
-For repeatable deployments, record the resolved image digest and the manifest with your application build. A rolling tag can move. Replacing a tag also does not guarantee that Docker Hub immediately removes all unreferenced storage; registry retention is controlled by Docker Hub.
+To extract all downloads through Docker, create a container from `vs69/tdlib:packages` with `--platform linux/amd64` and copy `/opt/tdlib/packages/.` to a local directory. Do not run that file container.
 
-Successful scheduled checks that find no change are removed from the Actions history after they finish. Failed checks, builds, and manual runs remain for troubleshooting. The cleanup workflow maintains its own small history; a completed no-change check can appear briefly before cleanup runs. [Maintenance details](https://github.com/vigarepo2/TDLib/blob/main/docs/MAINTAINERS.md)
+## Updates and verification
 
-## What is checked
+The publishing workflow runs automatically when build inputs change on `main` and checks official upstream `master` daily at **04:23 UTC (09:53 IST)**. It rebuilds when the upstream commit or build inputs change. No manual run is needed for routine updates; **Force rebuild** remains available for recovery. Unchanged publications skip compilation. Successful scheduled no-change checks are cleaned from Actions history; actual builds, failures and manual runs remain available.
 
-Builds verify the selected upstream source, package structure, and checksums. Linux images load the actual shared library and execute harmless JSON calls. Android packages are checked for all four ABIs, exported interfaces, required files, matching bindings, and 16 KB ELF alignment. Windows/macOS smoke checks load their native library, and the web check loads WebAssembly.
+Tags remain `latest`, `debian`, `alpine`, `dev`, `debian-dev`, `alpine-dev`, `android` and `packages`. No version-specific Docker tags are created. The GitHub release also uses `latest`. An upstream snapshot without an exact official tag is marked as a prerelease.
 
-These are build and library checks. They do not log into Telegram, test an application on every device, or guarantee that a future upstream change will compile without maintenance. Check the run results before relying on a new package.
+For repeatable deployments, pin an **image digest** and retain its manifest. For release downloads, obtain `SHA256SUMS` alongside the archives and run `sha256sum -c SHA256SUMS` in that directory. On macOS, use `shasum -a 256 -c SHA256SUMS`.
 
-Archives include license notices and machine-readable metadata. The rolling release publishes `manifest.json` and `SHA256SUMS`; Linux images also include `/usr/local/share/tdlib/build.json` and OCI labels with their source details.
+Publishing checks native JSON calls, Linux shared/static linking, Android ABI/JNI exports and alignment, portable package checksums, Apple architectures and WebAssembly startup. Cached outputs are verified before reuse. A completed release manifest is written only after all required images and downloads are published; interrupted publication is retried on the next check.
 
-## Set up your own publication
+These checks validate packages, not every consuming application or Telegram login flow. Consult the [successful run](https://github.com/vigarepo2/TDLib/actions/workflows/build-and-publish.yml) and release manifest before adopting an update. Upstream can change its API without changing its version string.
 
-For this repository, the destination is **[Docker Hub: vs69/tdlib](https://hub.docker.com/r/vs69/tdlib)**.
+## Publishing
 
-1. Create the public `tdlib` repository in the `vs69` Docker Hub account.
-2. Add GitHub Actions secrets **`DOCKER_USER`** (`vs69`) and **`DOCKER_PASSWORD`** (your Docker Hub account password).
-3. Run **Build and publish TDLib** once from the Actions tab.
+Build pins are maintained in [`build.json`](https://github.com/vigarepo2/TDLib/blob/main/build.json). Production code is limited to native build recipes, package verification, publishing helpers and workflows.
 
-The [quick start](https://github.com/vigarepo2/TDLib/blob/main/docs/QUICKSTART.md) explains the exact screens, login setup, workflow choices, and first-build expectations. Publishing and successful `main` validation runs update the Docker Hub overview from this README when configured, so documentation changes do not need a new native build.
+1. Create the Docker Hub repository identified by `docker.image` in `build.json`.
+2. Configure repository secrets `DOCKER_USER` and `DOCKER_PASSWORD`. Use a Docker Hub credential authorized to push images and update the repository description.
+3. Run [Build and publish TDLib](https://github.com/vigarepo2/TDLib/actions/workflows/build-and-publish.yml). The workflow checks credentials before compilation and publishes Android as soon as its four ABI builds pass.
 
-Prebuilt packages remove repeated native compilation from consumer builds. Image downloads, unpacking, application compilation, signing, and upload still take time. There is no fixed APK-build time guarantee; measure your own workflow after the first successful engine publication.
+The **Validate** workflow checks configuration, script syntax and Docker targets without publishing credentials. Successful validation on `main` synchronizes this README and the short description to Docker Hub; documentation changes do not require a native rebuild.
 
-## License and upstream
+Native builds run on Linux, Windows and macOS runners with their respective toolchains. To validate configuration locally, use Python 3.10+ and run `python3 scripts/check-upstream.py --validate`. Local native recipes require a clean official TDLib checkout and the pinned dependencies; the workflow contains the complete setup commands.
 
-Build scripts and documentation use the [Boost Software License 1.0](https://github.com/vigarepo2/TDLib/blob/main/LICENSE). Included software retains its own licenses; see [third-party notices](https://github.com/vigarepo2/TDLib/blob/main/THIRD_PARTY_NOTICES.md).
+## License and security
 
-[Official TDLib documentation](https://core.telegram.org/tdlib) · [Official source](https://github.com/tdlib/td) · [Contributing](https://github.com/vigarepo2/TDLib/blob/main/CONTRIBUTING.md) · [Security](https://github.com/vigarepo2/TDLib/blob/main/SECURITY.md)
+Build scripts and documentation use the [Boost Software License 1.0](https://github.com/vigarepo2/TDLib/blob/main/LICENSE). Distributed dependencies retain their own licenses; see [third-party notices](https://github.com/vigarepo2/TDLib/blob/main/THIRD_PARTY_NOTICES.md) and the notices shipped in each package.
+
+Report build or publication vulnerabilities through the [security policy](https://github.com/vigarepo2/TDLib/blob/main/SECURITY.md). Keep Telegram credentials, session databases and registry tokens out of source code, image layers and public logs.

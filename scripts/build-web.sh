@@ -111,5 +111,5 @@ pathlib.Path(sys.argv[1]).write_text(json.dumps({
     'smoke_test': 'Instantiated actual WebAssembly and executed getTextEntities under Node'
 }, indent=2) + '\n')
 PY
-python3 "$ROOT/scripts/package-common.py" --source "$SOURCE" --root "$OUTPUT" --platform web --build-json "$WORK/build-info.json"
+python3 "$ROOT/scripts/package.py" manifest --source "$SOURCE" --root "$OUTPUT" --platform web --build-json "$WORK/build-info.json"
 echo "Browser WebAssembly package ready: $OUTPUT"

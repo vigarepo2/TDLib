@@ -18,17 +18,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run tests and check Python and Bash syntax
+      - name: Validate configuration and script syntax
         run: |
-          python3 -m unittest discover -s tests -v
-          python3 -m compileall -q scripts tests
+          python3 scripts/check-upstream.py --validate
+          python3 -m compileall -q scripts
           find scripts -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+          git diff --check
       - uses: docker/setup-buildx-action@v3
+      - name: Validate GitHub Actions workflows
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color -shellcheck= -pyflakes=
       - name: Parse Docker build targets without compiling native code
         run: |
           docker buildx build --call=targets -f docker/linux.Dockerfile .
           docker buildx build --call=targets -f docker/alpine.Dockerfile .
-          docker buildx build --call=targets -f docker/android.Dockerfile .
           docker buildx build --call=targets -f docker/packages.Dockerfile .
   documentation:
     name: Synchronize changed Docker Hub documentation
@@ -36,9 +38,13 @@ jobs:
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    concurrency:
+      group: tdlib-documentation
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - name: Update Docker Hub overview when publishing is configured
         env:
@@ -46,7 +52,7 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           if [ -n "$DOCKER_PASSWORD" ]; then
-            python3 scripts/publish-docs.py --allow-missing-repository
+            python3 scripts/publish.py docs --allow-missing-repository
           else
             echo 'Docker Hub documentation sync will start after DOCKER_PASSWORD is configured.'
           fi

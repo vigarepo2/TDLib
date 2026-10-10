@@ -13,7 +13,7 @@ RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi \
     && apk add --no-cache bash ca-certificates cmake g++ gcc git gperf \
         linux-headers ninja openssl-dev python3 zlib-dev
-RUN --mount=type=cache,id=tdlib-alpine-${TARGETARCH}-${BUILD_FINGERPRINT}-${CACHE_BUST},target=/build \
+RUN --mount=type=cache,id=tdlib-alpine-${TARGETARCH}-${TDLIB_COMMIT}-${BUILD_FINGERPRINT}-${CACHE_BUST},target=/build \
     --mount=type=bind,source=upstream,target=/upstream,rw \
     --mount=type=bind,source=scripts,target=/scripts \
     --mount=type=bind,source=LICENSE,target=/distribution-license \
@@ -49,13 +49,26 @@ RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi \
     && apk add --no-cache cmake g++ gcc linux-headers make ninja pkgconf openssl-dev zlib-dev
 COPY --from=builder /opt/tdlib/ /usr/local/
-RUN --mount=type=bind,source=examples/cpp,target=/example \
-    tdlib-info \
-    && cmake -S /example -B /tmp/tdlib-shared \
-    && cmake --build /tmp/tdlib-shared && /tmp/tdlib-shared/tdlib-cpp \
-    && cmake -S /example -B /tmp/tdlib-static -DTDLIB_EXAMPLE_STATIC=ON \
-    && cmake --build /tmp/tdlib-static && /tmp/tdlib-static/tdlib-cpp \
-    && rm -rf /tmp/tdlib-shared /tmp/tdlib-static
+RUN --mount=type=bind,source=scripts,target=/scripts <<'SH'
+set -eu
+tdlib-info
+mkdir -p /tmp/tdlib-consumer
+cat > /tmp/tdlib-consumer/CMakeLists.txt <<'CMAKE'
+cmake_minimum_required(VERSION 3.16)
+project(tdlib_consumer LANGUAGES C CXX)
+find_package(Td REQUIRED CONFIG)
+foreach(kind IN ITEMS TdJson TdJsonStatic)
+  add_executable(${kind} /scripts/tdlib-info.c)
+  target_link_libraries(${kind} PRIVATE Td::${kind})
+  set_target_properties(${kind} PROPERTIES LINKER_LANGUAGE CXX)
+endforeach()
+CMAKE
+cmake -S /tmp/tdlib-consumer -B /tmp/tdlib-consumer/build
+cmake --build /tmp/tdlib-consumer/build
+/tmp/tdlib-consumer/build/TdJson
+/tmp/tdlib-consumer/build/TdJsonStatic
+rm -rf /tmp/tdlib-consumer
+SH
 USER tdlib
 CMD ["tdlib-info"]
 
